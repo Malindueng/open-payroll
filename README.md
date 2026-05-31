@@ -110,7 +110,7 @@ open-payroll-app/
     ├── wagmi.ts           # OPN Chain config
     ├── abi.ts             # Contract ABI
     └── utils.ts           # formatOPN, dailyToPerSec, etc.
-
+```
 ---
 
 ## 🗺 Roadmap
