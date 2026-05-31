@@ -85,30 +85,31 @@ Get a free WalletConnect project ID at [cloud.walletconnect.com](https://cloud.w
 
 ---
 
-## 📁 Project structure
+## Project Structure
 
+```text
 open-payroll-app/
 ├── app/
-│   ├── layout.tsx          # Root layout with Providers
-│   ├── page.tsx            # Landing page
+│   ├── layout.tsx         # Root layout with Providers
+│   ├── page.tsx           # Landing page
 │   ├── employer/
-│   │   └── page.tsx        # Employer dashboard
+│   │   └── page.tsx       # Employer dashboard
 │   └── employee/
-│       └── page.tsx        # Employee claim view
+│       └── page.tsx       # Employee claim view
 ├── components/
-│   ├── Navbar.tsx          # Navigation + ConnectButton
-│   ├── EmployeeCard.tsx    # Per-employee stream card
+│   ├── Navbar.tsx         # Navigation + ConnectButton
+│   ├── EmployeeCard.tsx   # Per-employee stream card
 │   └── ui/
 │       ├── Button.tsx
 │       ├── Card.tsx
 │       ├── Input.tsx
 │       └── StatusBadge.tsx
 ├── hooks/
-│   └── useLiveCounter.ts   # Real-time salary counter
+│   └── useLiveCounter.ts  # Real-time salary counter
 └── lib/
-    ├── wagmi.ts            # OPN Chain config
-    ├── abi.ts              # Contract ABI
-    └── utils.ts            # formatOPN, dailyToPerSec, etc.
+    ├── wagmi.ts           # OPN Chain config
+    ├── abi.ts             # Contract ABI
+    └── utils.ts           # formatOPN, dailyToPerSec, etc.
 
 ---
 
