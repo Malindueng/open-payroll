@@ -1,11 +1,15 @@
 "use client";
 
-import { useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import {
+  useWriteContract,
+  useWaitForTransactionReceipt,
+} from "wagmi";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { OPEN_PAYROLL_ABI } from "@/lib/abi";
 import { shortAddress, formatOPN, formatDate } from "@/lib/utils";
 import { useLiveCounter } from "@/hooks/useLiveCounter";
 import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 
 const CONTRACT = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS as `0x${string}`;
@@ -15,6 +19,7 @@ interface EmployeeData {
   salaryPerSec: bigint;
   startTime: bigint;
   lastClaimed: bigint;
+  pendingAmount: bigint;
   totalClaimed: bigint;
   active: boolean;
   exists: boolean;
@@ -27,22 +32,37 @@ export function EmployeeCard({
   employee: EmployeeData;
   onAction: () => void;
 }) {
-  const { writeContract, data: txHash, isPending } = useWriteContract();
-  const { isLoading: isConfirming } = useWaitForTransactionReceipt({
-    hash: txHash,
-    onReplaced: onAction,
-  });
+  const queryClient = useQueryClient();
+
+  const {
+    writeContract,
+    data: txHash,
+    isPending,
+    reset,
+  } = useWriteContract();
+
+  const { isLoading: isConfirming, isSuccess } =
+    useWaitForTransactionReceipt({ hash: txHash });
+
+  // When any transaction confirms — invalidate all reads and trigger parent refetch
+  useEffect(() => {
+    if (isSuccess) {
+      queryClient.invalidateQueries();
+      onAction();
+      reset();
+    }
+  }, [isSuccess, onAction, queryClient, reset]);
 
   const liveEarned = useLiveCounter(
     employee.salaryPerSec,
     employee.lastClaimed,
-    employee.active
+    employee.active,
+    employee.pendingAmount ?? BigInt(0),
   );
 
-  const dailyOPN =
-    parseFloat(
-      formatOPN(employee.salaryPerSec * BigInt(86400), 4)
-    ).toFixed(4);
+  const dailyOPN = parseFloat(
+    formatOPN(employee.salaryPerSec * BigInt(86400), 4)
+  ).toFixed(4);
 
   const busy = isPending || isConfirming;
 
@@ -63,7 +83,11 @@ export function EmployeeCard({
     });
 
   const terminate = () => {
-    if (!confirm(`Terminate stream for ${shortAddress(employee.wallet)}? This cannot be undone.`))
+    if (
+      !confirm(
+        `Terminate stream for ${shortAddress(employee.wallet)}? This cannot be undone.`
+      )
+    )
       return;
     writeContract({
       address: CONTRACT,
@@ -75,47 +99,105 @@ export function EmployeeCard({
 
   return (
     <Card>
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <div className="font-mono text-sm text-white mb-1">
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          marginBottom: "1rem",
+          gap: "0.5rem",
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              fontFamily: "monospace",
+              fontSize: "0.875rem",
+              color: "#f1f5f9",
+              marginBottom: "0.25rem",
+            }}
+          >
             {shortAddress(employee.wallet)}
           </div>
-          <div className="text-xs text-gray-500">
+          <div style={{ fontSize: "0.7rem", color: "#334155" }}>
             Since {formatDate(employee.startTime)}
           </div>
         </div>
         <StatusBadge active={employee.active} />
       </div>
 
-      {/* Live counter */}
-      <div className="bg-gray-800/60 rounded-lg p-4 mb-4">
-        <div className="text-xs text-gray-500 mb-1">Claimable now</div>
-        <div className="text-2xl font-mono font-semibold text-emerald-400">
+      <div
+        style={{
+          backgroundColor: "rgba(6, 182, 212, 0.05)",
+          border: "1px solid rgba(6, 182, 212, 0.12)",
+          borderRadius: "0.625rem",
+          padding: "0.875rem",
+          marginBottom: "0.875rem",
+        }}
+      >
+        <div
+          style={{
+            fontSize: "0.65rem",
+            color: "#475569",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            marginBottom: "0.375rem",
+          }}
+        >
+          Claimable now
+        </div>
+        <div
+          className="counter-glow"
+          style={{
+            fontFamily: "monospace",
+            fontSize: "1.5rem",
+            fontWeight: 700,
+            color: employee.active ? "#06b6d4" : "#475569",
+            letterSpacing: "-0.01em",
+          }}
+        >
           {liveEarned} OPN
         </div>
-        <div className="text-xs text-gray-500 mt-1">
-          {dailyOPN} OPN / day
+        <div style={{ fontSize: "0.7rem", color: "#334155", marginTop: "0.25rem" }}>
+          {employee.active ? `${dailyOPN} OPN / day` : "Stream paused"}
         </div>
       </div>
 
-      <div className="text-xs text-gray-600 mb-4">
-        Total claimed: {formatOPN(employee.totalClaimed)} OPN
+      <div style={{ fontSize: "0.75rem", color: "#334155", marginBottom: "0.875rem" }}>
+        Total claimed:{" "}
+        <span style={{ color: "#475569" }}>
+          {formatOPN(employee.totalClaimed)} OPN
+        </span>
       </div>
 
-      {/* Actions */}
-      <div className="flex gap-2 flex-wrap">
+      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
         {employee.active ? (
-          <Button variant="ghost" onClick={pause} disabled={busy}>
+          <button
+            className="btn-ghost"
+            onClick={pause}
+            disabled={busy}
+            style={{ flex: 1, minWidth: "80px" }}
+          >
             {busy ? "..." : "⏸ Pause"}
-          </Button>
+          </button>
         ) : (
-          <Button variant="success" onClick={resume} disabled={busy}>
+          <button
+            className="btn-success"
+            onClick={resume}
+            disabled={busy}
+            style={{ flex: 1, minWidth: "80px" }}
+          >
             {busy ? "..." : "▶ Resume"}
-          </Button>
+          </button>
         )}
-        <Button variant="danger" onClick={terminate} disabled={busy}>
+        <button
+          className="btn-danger"
+          onClick={terminate}
+          disabled={busy}
+          style={{ flex: 1, minWidth: "80px" }}
+        >
           {busy ? "..." : "✕ Terminate"}
-        </Button>
+        </button>
       </div>
     </Card>
   );

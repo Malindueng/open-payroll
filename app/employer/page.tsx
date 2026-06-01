@@ -1,18 +1,19 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useAccount,
   useReadContract,
   useWriteContract,
   useWaitForTransactionReceipt,
 } from "wagmi";
+import { useQueryClient } from "@tanstack/react-query";
 import { parseEther } from "viem";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Navbar } from "@/components/Navbar";
 import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { EmployeeCard } from "@/components/EmployeeCard";
 import { OPEN_PAYROLL_ABI } from "@/lib/abi";
@@ -22,22 +23,20 @@ const CONTRACT = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS as `0x${string}`;
 
 export default function EmployerPage() {
   const { address, isConnected } = useAccount();
+  const queryClient = useQueryClient();
 
-  // Form state
   const [employeeAddr, setEmployeeAddr] = useState("");
   const [dailySalary, setDailySalary] = useState("");
   const [depositAmount, setDepositAmount] = useState("");
 
-  // Read employer balance
   const { data: balance, refetch: refetchBalance } = useReadContract({
     address: CONTRACT,
     abi: OPEN_PAYROLL_ABI,
     functionName: "employerBalance",
     args: address ? [address] : undefined,
-    query: { enabled: !!address },
+    query: { enabled: !!address, refetchInterval: 5000 },
   });
 
-  // Read employee list
   const { data: employeeAddresses, refetch: refetchEmployees } = useReadContract({
     address: CONTRACT,
     abi: OPEN_PAYROLL_ABI,
@@ -46,29 +45,49 @@ export default function EmployerPage() {
     query: { enabled: !!address },
   });
 
-  // Write: deposit funds
+  const refetchAll = async () => {
+    await queryClient.invalidateQueries();
+    await refetchBalance();
+    await refetchEmployees();
+  };
+
+  // ── Deposit ──
   const {
     writeContract: deposit,
     data: depositTx,
     isPending: depositPending,
   } = useWriteContract();
 
-  const { isLoading: depositConfirming } = useWaitForTransactionReceipt({
-    hash: depositTx,
-    onReplaced: () => { refetchBalance(); setDepositAmount(""); },
-  });
+  const { isLoading: depositConfirming, isSuccess: depositSuccess } =
+    useWaitForTransactionReceipt({ hash: depositTx });
 
-  // Write: add employee
+  // Watch deposit success
+useEffect(() => {
+  if (depositSuccess) {
+    refetchAll();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDepositAmount("");
+  }
+}, [depositSuccess]);
+
+  // ── Add employee ──
   const {
     writeContract: addEmployee,
     data: addTx,
     isPending: addPending,
   } = useWriteContract();
 
-  const { isLoading: addConfirming } = useWaitForTransactionReceipt({
-    hash: addTx,
-    onReplaced: () => { refetchEmployees(); setEmployeeAddr(""); setDailySalary(""); },
-  });
+  const { isLoading: addConfirming, isSuccess: addSuccess } =
+    useWaitForTransactionReceipt({ hash: addTx });
+
+  useEffect(() => {
+  if (addSuccess) {
+    refetchAll();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setEmployeeAddr("");
+    setDailySalary("");
+  }
+}, [addSuccess]);
 
   const handleDeposit = () => {
     if (!depositAmount) return;
@@ -86,46 +105,89 @@ export default function EmployerPage() {
       address: CONTRACT,
       abi: OPEN_PAYROLL_ABI,
       functionName: "addEmployee",
-      args: [
-        employeeAddr as `0x${string}`,
-        dailyToPerSec(dailySalary),
-      ],
+      args: [employeeAddr as `0x${string}`, dailyToPerSec(dailySalary)],
     });
   };
 
-  const refetchAll = () => {
-    refetchBalance();
-    refetchEmployees();
-  };
+  const uniqueAddresses = [...new Set((employeeAddresses as string[]) ?? [])];
 
   if (!isConnected) {
     return (
-      <>
+      <div style={{ minHeight: "100vh", backgroundColor: "#0a0e1a" }}>
         <Navbar />
-        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-          <p className="text-gray-400">Connect your wallet to manage payroll</p>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: "calc(100vh - 60px)",
+            gap: "1rem",
+          }}
+        >
+          <div style={{ fontSize: "2rem" }}>💸</div>
+          <p style={{ color: "#475569", fontSize: "0.9rem" }}>
+            Connect your wallet to manage payroll
+          </p>
           <ConnectButton />
         </div>
-      </>
+      </div>
     );
   }
 
   return (
-    <>
+    <div style={{ minHeight: "100vh", backgroundColor: "#0a0e1a" }}>
       <Navbar />
-      <main className="max-w-6xl mx-auto px-6 py-10">
-        <h1 className="text-2xl font-bold text-white mb-2">Employer Dashboard</h1>
-        <p className="text-gray-500 text-sm mb-8">
-          Manage your payroll streams on OPN Chain
-        </p>
+      <main style={{ maxWidth: "1200px", margin: "0 auto", padding: "1.5rem" }}>
+        <div style={{ marginBottom: "1.5rem" }}>
+          <h1
+            style={{
+              fontSize: "1.5rem",
+              fontWeight: 700,
+              color: "#f1f5f9",
+              marginBottom: "0.25rem",
+              letterSpacing: "-0.01em",
+            }}
+          >
+            Employer Dashboard
+          </h1>
+          <p style={{ fontSize: "0.85rem", color: "#475569" }}>
+            Manage your payroll streams on OPN Chain
+          </p>
+        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
-
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+            gap: "1rem",
+            marginBottom: "1.5rem",
+          }}
+        >
           {/* Balance card */}
           <Card>
-            <div className="text-xs text-gray-500 mb-1">Contract Balance</div>
-            <div className="text-3xl font-mono font-bold text-white mb-4">
-              {balance !== undefined ? formatOPN(balance as bigint) : "—"} OPN
+            <div
+              style={{
+                fontSize: "0.7rem",
+                color: "#475569",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+                marginBottom: "0.25rem",
+              }}
+            >
+              Contract Balance
+            </div>
+            <div
+              style={{
+                fontSize: "2rem",
+                fontWeight: 700,
+                fontFamily: "monospace",
+                color: "#f1f5f9",
+                marginBottom: "1rem",
+              }}
+            >
+              {balance !== undefined ? formatOPN(balance as bigint) : "—"}{" "}
+              <span style={{ fontSize: "1rem", color: "#475569" }}>OPN</span>
             </div>
             <Input
               label="Deposit amount (OPN)"
@@ -134,25 +196,34 @@ export default function EmployerPage() {
               onChange={setDepositAmount}
               type="number"
             />
-            <Button
-              className="w-full mt-3"
+            <button
+              className="btn-primary"
+              style={{ width: "100%", marginTop: "0.75rem" }}
               onClick={handleDeposit}
               disabled={depositPending || depositConfirming || !depositAmount}
             >
               {depositPending || depositConfirming ? "Depositing..." : "Deposit Funds"}
-            </Button>
+            </button>
           </Card>
 
-          {/* Add employee card */}
-          <Card className="lg:col-span-2">
-            <div className="text-sm font-medium text-white mb-4">Add Employee</div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          {/* Add employee */}
+          <Card>
+            <div
+              style={{
+                fontSize: "0.875rem",
+                fontWeight: 600,
+                color: "#f1f5f9",
+                marginBottom: "1rem",
+              }}
+            >
+              Add Employee
+            </div>
+            <div className="grid-2" style={{ marginBottom: "1rem" }}>
               <Input
                 label="Employee wallet address"
                 placeholder="0x..."
                 value={employeeAddr}
                 onChange={setEmployeeAddr}
-                hint="Must be a valid 0x address"
               />
               <Input
                 label="Daily salary (OPN)"
@@ -160,30 +231,47 @@ export default function EmployerPage() {
                 value={dailySalary}
                 onChange={setDailySalary}
                 type="number"
-                hint="Streams per second on-chain"
               />
             </div>
-            <Button
+            <button
+              className="btn-primary"
               onClick={handleAddEmployee}
               disabled={addPending || addConfirming || !employeeAddr || !dailySalary}
             >
               {addPending || addConfirming ? "Adding..." : "+ Add Employee"}
-            </Button>
+            </button>
           </Card>
         </div>
 
-        {/* Employee list */}
-        <h2 className="text-lg font-semibold text-white mb-4">
-          Team ({employeeAddresses?.length ?? 0})
-        </h2>
+        {/* Team */}
+        <div style={{ marginBottom: "0.75rem" }}>
+          <h2 style={{ fontSize: "1rem", fontWeight: 600, color: "#f1f5f9" }}>
+            Team
+          </h2>
+        </div>
 
-        {!employeeAddresses || employeeAddresses.length === 0 ? (
-          <Card className="text-center text-gray-500 py-12">
-            No employees yet. Add one above to start streaming salary.
+        {uniqueAddresses.length === 0 ? (
+          <Card>
+            <div
+              style={{
+                textAlign: "center",
+                color: "#334155",
+                padding: "2rem 0",
+                fontSize: "0.875rem",
+              }}
+            >
+              No employees yet. Add one above to start streaming salary.
+            </div>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {(employeeAddresses as string[]).map((addr) => (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+              gap: "1rem",
+            }}
+          >
+            {uniqueAddresses.map((addr) => (
               <EmployeeCardWrapper
                 key={addr}
                 employerAddress={address!}
@@ -194,11 +282,10 @@ export default function EmployerPage() {
           </div>
         )}
       </main>
-    </>
+    </div>
   );
 }
 
-// Wrapper to fetch individual employee data
 function EmployeeCardWrapper({
   employerAddress,
   employeeAddress,
@@ -216,6 +303,10 @@ function EmployeeCardWrapper({
       employerAddress as `0x${string}`,
       employeeAddress as `0x${string}`,
     ],
+    query: {
+      // Poll every 5 seconds — catches claims and changes from employee side
+      refetchInterval: 5000,
+    },
   });
 
   if (!data || !(data as any).exists) return null;

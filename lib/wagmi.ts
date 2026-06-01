@@ -1,4 +1,4 @@
-import { createConfig, http } from "wagmi";
+import { http } from "wagmi";
 import { defineChain } from "viem";
 import { getDefaultConfig } from "@rainbow-me/rainbowkit";
 

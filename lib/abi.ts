@@ -393,6 +393,11 @@ export const OPEN_PAYROLL_ABI = [
                     },
                     {
                         "internalType": "uint256",
+                        "name": "pendingAmount",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
                         "name": "totalClaimed",
                         "type": "uint256"
                     },

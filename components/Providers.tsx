@@ -12,7 +12,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider theme={darkTheme()}>
+        <RainbowKitProvider
+          modalSize="compact"
+          appInfo={{
+            appName: "Open Payroll",
+          }}
+          theme={darkTheme({
+            accentColor: "#06b6d4",
+            accentColorForeground: "#0a0e1a",
+            borderRadius: "medium",
+            fontStack: "system",
+            overlayBlur: "small",
+          })}
+        >
           {children}
         </RainbowKitProvider>
       </QueryClientProvider>
